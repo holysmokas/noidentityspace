@@ -1,10 +1,19 @@
-// contact.js
+// contact.js - Secure contact form handler for NoIdentity.Space
 
-// Import the Apps Script URL from the separate configuration file
 import { APPS_SCRIPT_URL } from './config.js';
+import {
+    initFormSecurity,
+    validateFormSecurity,
+    recordSubmission,
+    prepareSecureFormData,
+    generateAbuseFingerprint
+} from './form-security.js';
+
+const FORM_ID = 'contactForm';
+const MAX_RETRIES = 3;
 
 document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('contactForm');
+    const form = document.getElementById(FORM_ID);
     const submitBtn = document.getElementById('submitBtn');
     const responseMessage = document.getElementById('responseMessage');
 
@@ -13,14 +22,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    form.addEventListener('submit', function (e) {
+    // Initialize security tracking for this form
+    initFormSecurity(FORM_ID);
+
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
 
-        // Configuration check - verify it's a valid Google Apps Script URL
+        // Configuration check
         if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === "YOUR_APPS_SCRIPT_URL_HERE" || !APPS_SCRIPT_URL.includes('script.google.com')) {
             handleError("Configuration Error: The Apps Script URL has not been set correctly in config.js.");
             return;
         }
+
+        // ========== SECURITY VALIDATION ==========
+        const securityCheck = validateFormSecurity(form, FORM_ID);
+
+        if (!securityCheck.valid) {
+            // Special case: bot detected via honeypot - show fake success
+            if (securityCheck.error === '__SILENT_FAIL__') {
+                handleFakeSuccess();
+                return;
+            }
+
+            // Show error for rate limiting, time gate, or input issues
+            handleError(securityCheck.error);
+            return;
+        }
+        // ==========================================
 
         // --- Start Submission State ---
         responseMessage.style.display = 'none';
@@ -28,15 +56,12 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Sending...';
 
-        const formData = new FormData(form);
-        // Explicitly set the formType to differentiate submissions in the Apps Script
-        formData.append('formType', 'contact');
+        // Prepare sanitized form data
+        const params = prepareSecureFormData(form);
+        params.append('formType', 'contact');
+        params.append('_fingerprint', generateAbuseFingerprint());
 
-        // Convert FormData to URLSearchParams for Apps Script compatibility (key=value&key2=value2)
-        const params = new URLSearchParams(formData);
-
-        // --- Fetch Request to Apps Script ---
-        const MAX_RETRIES = 3;
+        // --- Fetch Request with Retry Logic ---
         let retries = 0;
 
         const attemptSubmission = () => {
@@ -47,25 +72,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(response => response.text())
                 .then(text => {
                     if (text === 'success') {
+                        recordSubmission(); // Track for rate limiting
                         handleSuccess();
                     } else {
-                        // Handle errors returned specifically by the Apps Script (e.g., missing fields)
-                        throw new Error(`Form submission failed. Apps Script response: ${text}`);
+                        throw new Error(`Form submission failed. Response: ${text}`);
                     }
                 })
                 .catch(error => {
                     if (retries < MAX_RETRIES) {
                         retries++;
-                        const delay = Math.pow(2, retries) * 1000; // Exponential delay (2s, 4s, 8s)
+                        const delay = Math.pow(2, retries) * 1000;
                         setTimeout(attemptSubmission, delay);
                     } else {
-                        // Max retries reached, show error
                         console.error('Submission Error:', error);
                         handleError("We couldn't send your message. Please verify your internet connection and try again.");
                     }
                 })
                 .finally(() => {
-                    // --- End Submission State ---
                     if (retries >= MAX_RETRIES) {
                         submitBtn.disabled = false;
                         submitBtn.textContent = 'Send Message';
@@ -77,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /**
-     * Handles a successful form submission, updating the UI.
+     * Handles successful submission
      */
     function handleSuccess() {
         responseMessage.className = 'message-box message-success';
@@ -86,11 +109,29 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Send Message';
         form.reset();
+
+        // Re-initialize security after reset (new form load time)
+        initFormSecurity(FORM_ID);
     }
 
     /**
-     * Handles a failed form submission, updating the UI.
-     * @param {string} message - The error message to display to the user.
+     * Fake success for honeypot-caught bots (don't alert them)
+     */
+    function handleFakeSuccess() {
+        responseMessage.className = 'message-box message-success';
+        responseMessage.innerHTML = '<strong>Success!</strong> Your message has been sent. We will get back to you soon.';
+        responseMessage.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Message';
+        form.reset();
+
+        // Log for monitoring (in production, you might send this to analytics)
+        console.log('[Security] Bot submission blocked silently');
+    }
+
+    /**
+     * Handles submission errors
+     * @param {string} message - Error message to display
      */
     function handleError(message) {
         responseMessage.className = 'message-box message-error';

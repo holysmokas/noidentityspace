@@ -13,6 +13,26 @@
     <meta property="og:type" content="website">
     <title>Contact Us | NoIdentity.Space</title>
     <link rel="stylesheet" href="styles.css">
+
+    <!-- Honeypot field styling - multiple techniques to hide from humans but catch bots -->
+    <style>
+        .ohnohoney {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 0;
+            width: 0;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        /* Additional obfuscation - don't use obvious class names in production */
+        .form-field-website {
+            display: none !important;
+        }
+    </style>
 </head>
 
 <!-- Google tag (gtag.js) -->
@@ -50,23 +70,35 @@
             <p style="margin-bottom: 2rem;">If you have general inquiries, partnership proposals, or questions about a
                 specific guide, please use the form below. We aim to respond within 48 hours.</p>
 
-            <!-- REMOVED action attribute - JavaScript handles submission -->
             <form id="contactForm">
                 <div class="form-group">
                     <label for="name">Your Name</label>
-                    <input type="text" id="name" name="name" placeholder="John Doe" required>
+                    <input type="text" id="name" name="name" placeholder="John Doe" required maxlength="100"
+                        autocomplete="name">
                 </div>
                 <div class="form-group">
                     <label for="email">Your Email Address</label>
-                    <input type="email" id="email" name="email" placeholder="example@protonmail.com" required>
+                    <input type="email" id="email" name="email" placeholder="example@protonmail.com" required
+                        maxlength="254" autocomplete="email">
                 </div>
+
+                <!-- HONEYPOT FIELD - Hidden from humans, bots will fill it -->
+                <!-- Using a tempting field name that bots love to fill -->
+                <div class="ohnohoney" aria-hidden="true">
+                    <label for="website_url">Website URL (Leave blank)</label>
+                    <input type="text" id="website_url" name="website_url" tabindex="-1" autocomplete="off">
+                </div>
+                <!-- END HONEYPOT -->
+
                 <div class="form-group">
                     <label for="subject">Subject</label>
-                    <input type="text" id="subject" name="subject" placeholder="Question about VPN article" required>
+                    <input type="text" id="subject" name="subject" placeholder="Question about VPN article" required
+                        maxlength="200">
                 </div>
                 <div class="form-group">
                     <label for="message">Message</label>
-                    <textarea id="message" name="message" placeholder="Type your message here..." required></textarea>
+                    <textarea id="message" name="message" placeholder="Type your message here..." required
+                        maxlength="5000"></textarea>
                 </div>
 
                 <button type="submit" class="submit-btn" id="submitBtn">Send Message</button>
@@ -86,8 +118,6 @@
                     <p style="margin-top: 1rem;">We aim to respond to all messages within 2-3 business days.</p>
                 </div>
             </div>
-
-
         </aside>
     </div>
 

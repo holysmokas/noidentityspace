@@ -12,7 +12,20 @@
     <title>NoIdentity.Space - Reclaim Your Digital Freedom</title>
     <link rel="stylesheet" href="styles.css">
 
-
+    <!-- Honeypot field styling -->
+    <style>
+        .ohnohoney {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 0;
+            width: 0;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+    </style>
 </head>
 
 <!-- Google tag (gtag.js) -->
@@ -168,10 +181,18 @@
                 tracking, ever.</p>
             <form id="newsletterForm">
                 <div class="form-group">
-                    <input type="email" name="email" id="newsletter-email" placeholder="Your Email Address" required>
+                    <input type="email" name="email" id="newsletter-email" placeholder="Your Email Address" required
+                        maxlength="254" autocomplete="email">
                 </div>
+
+                <!-- HONEYPOT FIELD - Hidden from humans, bots will fill it -->
+                <div class="ohnohoney" aria-hidden="true">
+                    <label for="newsletter_website_url">Website URL</label>
+                    <input type="text" id="newsletter_website_url" name="website_url" tabindex="-1" autocomplete="off">
+                </div>
+                <!-- END HONEYPOT -->
+
                 <button type="submit" class="submit-btn" id="newsletterSubmitBtn">Subscribe</button>
-                <!-- Response message will be inserted here by JavaScript -->
             </form>
         </div>
     </section>

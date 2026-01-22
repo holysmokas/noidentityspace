@@ -1,9 +1,15 @@
-// main.js - Central JavaScript entry point for general site functionality.
+// main.js - Central JavaScript entry point for NoIdentity.Space
+// Includes secure newsletter form handling
 
-// Import necessary modules
 import { APPS_SCRIPT_URL } from './config.js';
+import {
+    initFormSecurity,
+    validateFormSecurity,
+    recordSubmission,
+    prepareSecureFormData,
+    generateAbuseFingerprint
+} from './form-security.js';
 
-// Max retries for fetch operations
 const MAX_RETRIES = 3;
 
 // --- Global Functions ---
@@ -21,12 +27,13 @@ window.toggleMenu = function () {
 // --- Newsletter Form Handling ---
 
 /**
- * Handles the newsletter form submission using the Apps Script endpoint.
+ * Handles secure newsletter form submission
  */
 function handleNewsletterSubmission(e) {
     e.preventDefault();
 
     const form = e.target;
+    const formId = form.id || 'newsletterForm';
     const submitBtn = form.querySelector('button[type="submit"]');
 
     // Get or create response message element
@@ -44,9 +51,25 @@ function handleNewsletterSubmission(e) {
 
     // Configuration check
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === "YOUR_APPS_SCRIPT_URL_HERE" || !APPS_SCRIPT_URL.includes('script.google.com')) {
-        showError(responseMessage, submitBtn, "Configuration Error: The Apps Script URL has not been set correctly in config.js.");
+        showError(responseMessage, submitBtn, "Configuration Error: The Apps Script URL has not been set correctly.");
         return;
     }
+
+    // ========== SECURITY VALIDATION ==========
+    const securityCheck = validateFormSecurity(form, formId);
+
+    if (!securityCheck.valid) {
+        // Bot detected via honeypot - show fake success
+        if (securityCheck.error === '__SILENT_FAIL__') {
+            showFakeSuccess(responseMessage, submitBtn, form, formId);
+            return;
+        }
+
+        // Show error for rate limiting, time gate, or input issues
+        showError(responseMessage, submitBtn, securityCheck.error);
+        return;
+    }
+    // ==========================================
 
     // --- Start Submission State ---
     responseMessage.style.display = 'none';
@@ -54,14 +77,12 @@ function handleNewsletterSubmission(e) {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Subscribing...';
 
-    const formData = new FormData(form);
-    // Add formType to differentiate from contact form
-    formData.append('formType', 'newsletter');
+    // Prepare sanitized form data
+    const params = prepareSecureFormData(form);
+    params.append('formType', 'newsletter');
+    params.append('_fingerprint', generateAbuseFingerprint());
 
-    // Convert FormData to URLSearchParams for Apps Script compatibility
-    const params = new URLSearchParams(formData);
-
-    // --- Fetch Request to Apps Script ---
+    // --- Fetch Request with Retry Logic ---
     let retries = 0;
 
     const attemptSubmission = () => {
@@ -72,22 +93,20 @@ function handleNewsletterSubmission(e) {
             .then(response => response.text())
             .then(text => {
                 if (text === 'success') {
-                    showSuccess(responseMessage, submitBtn);
-                    form.reset();
+                    recordSubmission();
+                    showSuccess(responseMessage, submitBtn, form, formId);
                 } else {
-                    // Handle errors returned by the Apps Script
-                    throw new Error(`Subscription failed. Apps Script response: ${text}`);
+                    throw new Error(`Subscription failed. Response: ${text}`);
                 }
             })
             .catch(error => {
                 if (retries < MAX_RETRIES) {
                     retries++;
-                    const delay = Math.pow(2, retries) * 1000; // Exponential delay
+                    const delay = Math.pow(2, retries) * 1000;
                     setTimeout(attemptSubmission, delay);
                 } else {
-                    // Max retries reached, show error
                     console.error('Submission Error:', error);
-                    showError(responseMessage, submitBtn, "We couldn't subscribe your email. Please verify your internet connection and try again.");
+                    showError(responseMessage, submitBtn, "We couldn't subscribe your email. Please try again later.");
                 }
             });
     };
@@ -96,14 +115,32 @@ function handleNewsletterSubmission(e) {
 }
 
 /**
- * Shows success message
+ * Shows success message and resets form
  */
-function showSuccess(messageElement, submitBtn) {
+function showSuccess(messageElement, submitBtn, form, formId) {
     messageElement.className = 'message-box message-success';
     messageElement.innerHTML = '<strong>Success!</strong> You have been subscribed to our newsletter!';
     messageElement.style.display = 'block';
     submitBtn.disabled = false;
     submitBtn.textContent = 'Subscribe';
+    form.reset();
+
+    // Re-initialize security after reset
+    initFormSecurity(formId);
+}
+
+/**
+ * Shows fake success for honeypot-caught bots
+ */
+function showFakeSuccess(messageElement, submitBtn, form, formId) {
+    messageElement.className = 'message-box message-success';
+    messageElement.innerHTML = '<strong>Success!</strong> You have been subscribed to our newsletter!';
+    messageElement.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Subscribe';
+    form.reset();
+
+    console.log('[Security] Bot newsletter submission blocked silently');
 }
 
 /**
@@ -118,26 +155,28 @@ function showError(messageElement, submitBtn, message) {
 }
 
 /**
- * Sets up newsletter form listeners for both main and sidebar forms.
+ * Sets up newsletter form with security
  */
 function setupNewsletterForm() {
     // Main newsletter form (on index.html)
     const newsletterForm = document.getElementById('newsletterForm');
     if (newsletterForm) {
+        initFormSecurity('newsletterForm');
         newsletterForm.addEventListener('submit', handleNewsletterSubmission);
-        console.log('Main newsletter form listener attached');
+        console.log('[Security] Main newsletter form initialized');
     }
 
     // Sidebar newsletter form (on article pages)
     const sidebarNewsletterForm = document.getElementById('sidebarNewsletterForm');
     if (sidebarNewsletterForm) {
+        initFormSecurity('sidebarNewsletterForm');
         sidebarNewsletterForm.addEventListener('submit', handleNewsletterSubmission);
-        console.log('Sidebar newsletter form listener attached');
+        console.log('[Security] Sidebar newsletter form initialized');
     }
 }
 
 /**
- * Enables smooth scrolling and sets up form listeners.
+ * Main initialization
  */
 document.addEventListener('DOMContentLoaded', () => {
     // Setup smooth scrolling
@@ -156,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Setup the newsletter form
+    // Setup newsletter forms with security
     setupNewsletterForm();
 });
-
