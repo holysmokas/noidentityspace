@@ -202,6 +202,11 @@
                 <form id="sidebarNewsletterForm" class="sidebar-newsletter-form">
                     <input type="email" name="email" placeholder="Your email" required
                         style="width: 100%; padding: 0.75rem; border: none; border-radius: 6px; margin-bottom: 0.5rem;">
+        <!-- HONEYPOT FIELD - Hidden from humans, bots will fill it -->
+        <div style="opacity: 0; position: absolute; top: 0; left: 0; height: 0; width: 0; z-index: -1; overflow: hidden;" aria-hidden="true">
+            <input type="text" name="website_url" tabindex="-1" autocomplete="off">
+        </div>
+        <!-- END HONEYPOT -->
                     <button type="submit"
                         style="width: 100%; padding: 0.75rem; background: white; color: var(--primary); border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
                         Subscribe
