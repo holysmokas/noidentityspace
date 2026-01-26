@@ -19,6 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # ✅ 2. Setup Node.js
       - name: Setup Node.js
@@ -56,6 +57,14 @@ jobs:
 
           # Ensure we're on the main branch
           git checkout main || git checkout -b main
+
+          # ⚡ CRITICAL: Pull latest changes to avoid non-fast-forward rejection
+          echo "📥 Pulling latest changes from remote..."
+          git pull --rebase origin main || {
+            echo "⚠️ Rebase failed, trying merge strategy..."
+            git rebase --abort 2>/dev/null || true
+            git pull origin main --no-rebase
+          }
 
           # Add any new or updated files
           git add -A articles
